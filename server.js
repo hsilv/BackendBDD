@@ -25,11 +25,10 @@ app.get("/login", async (req, res) => {
     res.send("Usuario o contraseña incorrecta");
   } else {
     const client = new Client(dbClientData); //Creación de cliente de conexión
-    const query = "SELECT * FROM CLIENT WHERE NOMBRE=$1 AND PASSWORD=$2"; //Instrucción del query a ejecutar
-    const values = [
-      req.body.username.toString().toLowerCase(),
-      req.body.password.toString(),
-    ]; //Valores que vienen de la petición HTTP GET
+    const query = "SELECT * FROM DOCTOR WHERE USERNAME=$1 AND PASSWORD=$2"; //Instrucción del query a ejecutar
+
+    const values = [req.body.username.toString(), req.body.password.toString()];
+    //Valores que vienen de la petición HTTP GET
     var logFlag = false; //Autenticación falsa por defecto
 
     //Conexión del cliente a la base de datos (con espera)
@@ -49,7 +48,8 @@ app.get("/login", async (req, res) => {
       })
       .catch((err) => console.error("Error al ejecutar consulta", err.stack));
 
-    await client //Cerrar la conexión a la base de datos
+    //Cerrar la conexión a la base de datos
+    await client
       .end()
       .then(() => console.log("Conexión cerrada"))
       .catch((err) => console.error("Error al cerrar conexión", err.stack));
@@ -63,43 +63,64 @@ app.get("/login", async (req, res) => {
   }
 });
 
+//Solicitud POST de registro
 app.post("/register", async (req, res) => {
+  //Creación de cliente para conectarse a base de datos
   const client = new Client(dbClientData);
 
-  var values = ["id", req.body.nombre, req.body.password];
+  var values = [
+    "id",
+    req.body.name.toString(),
+    req.body.direction.toString(),
+    req.body.phone.toString(),
+    parseInt(req.body.collegiate),
+    parseInt(req.body.speciality),
+    req.body.username.toString(),
+    req.body.password.toString(),
+  ]; //Establecer los valores del query
   const text =
-    "INSERT INTO CLIENT(ID_USER, NOMBRE, PASSWORD) VALUES ($1, $2, $3)";
-  var code = 0;
+    "INSERT INTO DOCTOR(ID_DOCTOR, DOCTOR_NAME, DIRECTION, PHONE_NUMBER, COLLEGIATE_NUMBER, ID_SPECIALITY, USERNAME, PASSWORD) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"; //Instrucción del query
+  var code = 0; //Código de respuesta
 
+  //Conexión a la base de datos
   await client
     .connect()
     .then(() => console.log("Conexión establecida"))
     .catch((err) => console.error("Error al conectar", err.stack));
 
+  //Cálculo del id del cliente
   await client
-    .query("SELECT * FROM CLIENT")
+    .query("SELECT MAX(ID_DOCTOR) FROM DOCTOR")
     .then((res) => {
-      console.log(res.rowCount);
-      values[0] = parseInt(res.rowCount) + 1;
+      console.log(res.rows[0].max)
+      if(res.rows[0].max == null){
+        values[0] = 1;
+        console.log(values[0])
+      }else{
+        values[0] = parseInt(res.rows[0].max) + 1;
+      }
     })
     .catch((err) => console.error("Error al ejecutar consulta", err.stack));
 
+  //Inserción de nuevo usuario
   await client
     .query(text, values)
     .then((res) => console.log("Usuario insertado con éxito"))
     .catch((err) => {
       if (
-        err.message.includes("duplicate key value violates unique constraint")
+        err.message.includes("duplicate key value violates unique constraint") //Si existe alguna violación, es por constraint de username
       ) {
         code = 1;
       }
     });
 
+  //Cerrar la conexión
   await client
     .end()
     .then(() => console.log("Conexión cerrada"))
     .catch((err) => console.error("Error al cerrar conexión", err.stack));
 
+  //Respuesta al query
   if (code == 0) {
     res.send("Usuario creado");
   } else if (code == 1) {
